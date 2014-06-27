@@ -75,7 +75,6 @@ function ecos_debug(problem::Problem)
   return create_ecos_matrices(canonical_constraints_array, objective)
 end
 
-
 # Given the canonical_constraints_array, creates conic inequality matrix G and h
 # as well as the equality matrix A and b
 function create_ecos_matrices(canonical_constraints_array, objective)
