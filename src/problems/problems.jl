@@ -68,9 +68,11 @@ function solve!(problem::Problem, method=:ecos)
     problem.objective = -problem.objective
   end
 
+  ecos_problem, variable_index, eq_constr_index, ineq_constr_index = ECOSConicProblem(problem)
+  cp = ConicProblem(ecos_problem)
 	if method == :ecos
-		ecos_problem, variable_index, eq_constr_index, ineq_constr_index = ECOSConicProblem(problem)
-		solution = solve(ecos_problem)
+    ecos_problem = ECOSConicProblem(cp)
+    solution = solve(ecos_problem)
 	else
 		println("method $method not implemented")
 	end
