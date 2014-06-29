@@ -1,5 +1,5 @@
 import ECOS
-export solve
+export solve, EcosSolution
 
 # Calls the ECOS C solver
 #
@@ -33,12 +33,12 @@ function ecos_solve(;n::Int64=nothing, m::Int64=nothing, p::Int64=0, l::Int64=0,
   ptr_work = ECOS.setup(n=n, m=m, p=p, l=l, ncones=ncones, q=q, G=G, c=c, h=h, A=A, b=b)
   ret_val = ECOS.solve(ptr_work)
 
-  solution = get_ecos_solution(ptr_work, n, p, m, ret_val)
+  solution = EcosSolution(ptr_work, n, p, m, ret_val)
 
   # 4 means we keep x,y,s,z.
   num_vars_to_keep = 4
   ECOS.cleanup(ptr_work, 4)
-  return solution
+  return solution     
 end
 function solve(p::ECOSConicProblem)
   solution = ecos_solve(n=p.n, m=p.m, p=p.p, l=p.l, ncones=p.ncones, q=p.q, G=p.G, c=p.c, h=p.h, A=p.A, b=p.b)
@@ -52,7 +52,7 @@ end
 # z: dual variables for inequality constraints s \in K
 # note slacks are nonzero iff dual variables are zero, 
 # by complementary slackness
-function get_ecos_solution(ptr_work, n, p, m, ret_val)
+function EcosSolution(ptr_work, n, p, m, ret_val)
   work = pointer_to_array(ptr_work, 1)[1]
 
   x = pointer_to_array(work.x, n)
@@ -60,7 +60,39 @@ function get_ecos_solution(ptr_work, n, p, m, ret_val)
   z = pointer_to_array(work.z, m)
   s = pointer_to_array(work.s, m)
 
-  return Solution(x, y, z, ret_val)
+  return EcosSolution(x, y, z, ret_val)
+end
+
+# Declares the Solution type, which stores the primal and dual variables as well
+# as the status of the solver
+# TODO: Call x, y and z primal, dual_equality and dual_inequality
+# x: primal variables
+# y: dual variables for equality constraints
+# z: dual variables for inequality constraints s \in K
+type EcosSolution
+  x::Array{Float64, 1} # x: primal variables
+  y::Array{Float64, 1} # y: dual variables for equality constraints
+  z::Array{Float64, 1} # z: dual variables for inequality constraints s \in K
+  status::ASCIIString
+  ret_val::Int64
+  optval::Float64OrNothing
+
+  const status_map = {
+    0 => ":Optimal",
+    1 => ":PrimalInfeasible",
+    2 => ":DualInfeasible",
+    -1 => ":UserLimit",
+    -2 => ":Error",
+    -3 => ":Error"
+  }
+
+  function EcosSolution(x::Array{Float64, 1}, y::Array{Float64, 1}, z::Array{Float64, 1}, ret_val::Int64, optval::Float64OrNothing=nothing)
+    if haskey(status_map, ret_val)
+      return new(x, y, z, status_map[ret_val], ret_val, optval)
+    else
+      return new(x, y, z, "unknown problem in solver", ret_val, optval)
+    end
+  end
 end
 
 function ecos_debug(problem::Problem)
@@ -175,7 +207,12 @@ function create_ecos_matrices(canonical_constraints_array, objective)
       h[l_index : l_index + m_var - 1] = constraint.constant
       l_index += m_var
     end
+
+    constr_index = eq_constr_index
+    for uid in ineq_constr_index
+      constr_index[uid] = ineq_constr_index[uid] + p_index
+    end
   end
 
-  return m, n, p, l, ncones, q, G, h, A, b, variable_index, eq_constr_index, ineq_constr_index
+  return m, n, p, l, ncones, q, G, h, A, b, variable_index, constr_index
 end

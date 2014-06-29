@@ -68,17 +68,18 @@ function solve!(problem::Problem, method=:ecos)
     problem.objective = -problem.objective
   end
 
-  ecos_problem, variable_index, eq_constr_index, ineq_constr_index = ECOSConicProblem(problem)
-  cp = ConicProblem(ecos_problem)
+  ecos_problem, variable_index, constr_index = ECOSConicProblem(problem)
+  cp = IneqConicProblem(ecos_problem)
 	if method == :ecos
     ecos_problem = ECOSConicProblem(cp)
     solution = solve(ecos_problem)
 	else
-		println("method $method not implemented")
+    solution = solve(cp, method)
 	end
+  solution = PrimalDualSolution(solution)
 
   # minimize -> maximize
-  if (problem.head == :maximize) && (solution.status == "solved")
+  if (problem.head == :maximize) && (solution.status == :Optimal)
     solution.optval = -solution.optval
   end
 
@@ -87,7 +88,7 @@ function solve!(problem::Problem, method=:ecos)
 	problem.status = solution.status
 	problem.solution = solution
 
-	if problem.status == "solved"
+	if problem.status == :Optimal
 		populate_variables!(problem, variable_index)
 		populate_constraints!(problem, eq_constr_index, ineq_constr_index)
 	end
@@ -118,21 +119,18 @@ function populate_variables!(problem::Problem, variable_index::Dict{Int64, Int64
   end
 end
 
-function populate_constraints!(problem::Problem, eq_constr_index::Dict{Int64, Int64},
-    ineq_constr_index::Dict{Int64, Int64})
+function populate_constraints!(problem::Problem, constr_index::Dict{Int64, Int64})
 
-  y = problem.solution.y
-  z = problem.solution.z
+  # dual value is unknown if we used a solver that is not a primal dual solver
+  if not solution.attrs[:dual]
+  for constraint in problem.constraints
+    constraint.dual_value = :unknown
+  end    
 
+  dual = problem.solution.dual
   for constraint in problem.constraints
     uid = constraint.canon_uid
-    if constraint.head == :(==)
-      index = eq_constr_index[uid]
-      constraint.dual_value = Base.reshape(y[index : index + get_vectorized_size(constraint.size) - 1], constraint.size)
-    else
-      index = ineq_constr_index[uid]
-      constraint.dual_value = Base.reshape(z[index : index + get_vectorized_size(constraint.size) - 1], constraint.size)
-    end
+    constraint.dual_value = Base.reshape(dual[index : index + get_vectorized_size(constraint.size) - 1], constraint.size)
   end
 end
 

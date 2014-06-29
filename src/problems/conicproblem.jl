@@ -1,12 +1,20 @@
-import Base.convert, Base.show
+import Base.show
 
 export 
     ConicProblem, 
     IneqConicProblem,
+    ConicProblemSolution, 
+    IneqConicProblemSolution,
     ECOSConicProblem,
     cones,
+    problemtype,
     show
 
+cones_in = {:LP=>Set({:NonNeg}),
+            :SOC=>Set({:NonNeg, :SOC})
+            :SDP=>Set({:NonNeg, :SOC, :SDP})}
+
+import Base.convert
 convert(::Type{Range}, i::Integer) = i:i 
 
 # The ConicProblem type stores the problem data
@@ -31,7 +39,16 @@ function show(io::IO, p::ConicProblem)
             b:\n$(p.b)
             K:\n$(p.cones)")
 end
-cones(p::ConicProblem) = Set(keys(p.cones))
+cones(cp::ConicProblem) = Set(keys(cp.cones))
+function problemtype(cp::ConicProblem)
+    mycones = cones(cp)
+    for problem_type in [:LP, :SOC, :SDP]
+        if isempty(mycones - cones_in(problem_type))
+            return problem_type
+        end
+    end
+    error("No solvers found to solve problems with cones $mycones")
+end
 
 # The IneqConicProblem type stores the problem data in conic inequality form
 # an IneqConicProblem instance corresponds to the problem
@@ -61,18 +78,18 @@ end
 
 cones(p::IneqConicProblem) = Set(keys(p.cones))
 
-type ECOSConicProblem
-    n
-    m
-    p
-    l
-    ncones
-    q
-    G
-    c
-    h
-    A
-    b
+type ECOSConicProblem{T<:Number}
+    n::Integer          # number of variables
+    m::Integer          # number of inequality constraints, ie, size(G,1)
+    p::Integer          # number of equality constraints
+    l::Integer          # dimension of the positive orthant constraints
+    ncones::Integer     # number of SOC cones
+    q::Array{Integer, 1}# array of integers of length ncones, where each element defines the dimension of the cone
+    G::Array{T, 2}      # inequality constraint Gx \leq_K h, m,n = size(G)
+    c::Array{T, 2}      # objective function
+    h::Array{T, 2}      # rhs of inequality constraints
+    A::Array{T, 2}      # equality constraints, p,n = size(A)
+    b::Array{T, 2}      # rhs of equality constraints
 end
 ECOSConicProblem(;n=n, m=m, p=p, l=l, ncones=ncones, q=q, G=G, c=c, h=h, A=A, b=b) = 
     ECOSConicProblem(n, m, p, l, ncones, q, G, c, h, A, b)

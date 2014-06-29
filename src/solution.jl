@@ -1,35 +1,27 @@
-export Solution
+import MathProgBase.Solution # and EcosSolution, when it lives in its own package
+export PrimalDualSolution
 
-Float64OrNothing = Union(Float64, Nothing)
+Float64OrNothing = Union(Float64,Nothing)
 
-# Declares the Solution type, which stores the primal and dual variables as well
-# as the status of the solver
-# TODO: Call x, y and z primal, dual_equality and dual_inequality
-# x: primal variables
-# y: dual variables for equality constraints
-# z: dual variables for inequality constraints s \in K
-type Solution
-  x::Array{Float64, 1} # x: primal variables
-  y::Array{Float64, 1} # y: dual variables for equality constraints
-  z::Array{Float64, 1} # z: dual variables for inequality constraints s \in K
+type PrimalDualSolution{T<:FloatingPoint}
+  primal::Array{T, 1}
+  dual::Array{T, 1} # with indices that correspond to cones in original problem
   status::ASCIIString
-  ret_val::Int64
   optval::Float64OrNothing
+  attrs
+end
 
-  const status_map = {
-    0 => "solved",
-    1 => "primal infeasible",
-    2 => "dual infeasible",
-    -1 => "max iterations reached",
-    -2 => "numerical problems in solver",
-    -3 => "numerical problems in solver"
-  }
-
-  function Solution(x::Array{Float64, 1}, y::Array{Float64, 1}, z::Array{Float64, 1}, ret_val::Int64, optval::Float64OrNothing=nothing)
-    if haskey(status_map, ret_val)
-      return new(x, y, z, status_map[ret_val], ret_val, optval)
-    else
-      return new(x, y, z, "unknown problem in solver", ret_val, optval)
-    end
+function PrimalDualSolution(s::Solution)
+  attrs = s.attrs
+  if :lambda in keys(attrs)  
+    attrs[:dual] = true
+  else
+  	attrs[:dual] = false
   end
+  return PrimalDualSolution(s.sol, s.attrs[:lambda], s.status, s.objval, s.attrs)
+end
+
+function PrimalDualSolution(s::EcosSolution)
+  attrs = {:dual => true}
+  return PrimalDualSolution(s.x, vcat(s.y,s.z), s.status, s.optval, attrs)
 end
