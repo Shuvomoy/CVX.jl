@@ -121,16 +121,16 @@ end
 
 function populate_constraints!(problem::Problem, constr_index::Dict{Int64, Int64})
 
-  # dual value is unknown if we used a solver that is not a primal dual solver
   if not solution.attrs[:dual]
-  for constraint in problem.constraints
-    constraint.dual_value = :unknown
-  end    
-
-  dual = problem.solution.dual
-  for constraint in problem.constraints
-    uid = constraint.canon_uid
-    constraint.dual_value = Base.reshape(dual[index : index + get_vectorized_size(constraint.size) - 1], constraint.size)
+    dual = problem.solution.dual
+    for constraint in problem.constraints
+      uid = constraint.canon_uid
+      constraint.dual_value = Base.reshape(dual[index : index + get_vectorized_size(constraint.size) - 1], constraint.size)
+    end  
+  else # dual value is unknown if we used a solver that is not a primal dual solver
+    for constraint in problem.constraints
+      constraint.dual_value = :unknown
+    end  
   end
 end
 
@@ -163,4 +163,19 @@ function get_var_dict(objective::AbstractCvxExpr, constraints::Array{CvxConstr})
   end
 
   return var_dict
+end
+
+function ECOSConicProblem(problem::Problem)
+    canonical_constraints_array = canonical_constraints(problem)
+    m, n, p, l, ncones, q, G, h, A, b, variable_index, eq_constr_index, ineq_constr_index =
+        create_ecos_matrices(canonical_constraints_array, problem.objective)
+
+    # Now, all we need to do is create c
+    c = zeros(n, 1)
+    objective = problem.objective
+    if objective.vexity != :constant
+        uid = objective.uid
+        c[variable_index[uid] : variable_index[uid] + objective.size[1] - 1] = 1
+    end  
+    return ECOSConicProblem(n=n, m=m, p=p, l=l, ncones=ncones, q=q, G=G, c=c, h=h, A=A, b=b), variable_index, eq_constr_index, ineq_constr_index
 end

@@ -1,6 +1,8 @@
 import ECOS
 export solve, EcosSolution
 
+Float64OrNothing = Union(Float64,Nothing)
+
 # Calls the ECOS C solver
 #
 # Input
@@ -33,7 +35,7 @@ function ecos_solve(;n::Int64=nothing, m::Int64=nothing, p::Int64=0, l::Int64=0,
   ptr_work = ECOS.setup(n=n, m=m, p=p, l=l, ncones=ncones, q=q, G=G, c=c, h=h, A=A, b=b)
   ret_val = ECOS.solve(ptr_work)
 
-  solution = EcosSolution(ptr_work, n, p, m, ret_val)
+  solution = toEcosSolution(ptr_work, n, p, m, ret_val)
 
   # 4 means we keep x,y,s,z.
   num_vars_to_keep = 4
@@ -52,7 +54,7 @@ end
 # z: dual variables for inequality constraints s \in K
 # note slacks are nonzero iff dual variables are zero, 
 # by complementary slackness
-function EcosSolution(ptr_work, n, p, m, ret_val)
+function toEcosSolution(ptr_work, n, p, m, ret_val)
   work = pointer_to_array(ptr_work, 1)[1]
 
   x = pointer_to_array(work.x, n)
@@ -93,18 +95,6 @@ type EcosSolution
       return new(x, y, z, "unknown problem in solver", ret_val, optval)
     end
   end
-end
-
-function ecos_debug(problem::Problem)
-  objective = problem.objective
-
-  canonical_constraints_array = CanonicalConstr[]
-  for constraint in problem.constraints
-    append!(canonical_constraints_array, constraint.canon_form())
-  end
-
-  append!(canonical_constraints_array, objective.canon_form())
-  return create_ecos_matrices(canonical_constraints_array, objective)
 end
 
 # Given the canonical_constraints_array, creates conic inequality matrix G and h

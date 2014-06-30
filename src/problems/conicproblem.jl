@@ -11,7 +11,7 @@ export
     show
 
 cones_in = {:LP=>Set({:NonNeg}),
-            :SOC=>Set({:NonNeg, :SOC})
+            :SOC=>Set({:NonNeg, :SOC}),
             :SDP=>Set({:NonNeg, :SOC, :SDP})}
 
 import Base.convert
@@ -103,24 +103,6 @@ function cones(p::ECOSConicProblem)
         push!(mycones, :NonNeg)
     end
     return mycones
-end
-# CAUTION: For now, we assume we are solving a linear program.
-# Loops over the objective and constraints to get the canonical constraints array.
-# It then calls create_ecos_matrices which will create the inequality/equality matrices
-# and their corresponding coefficients, which are then passed to ecos_solve
-function ECOSConicProblem(problem::Problem)
-    canonical_constraints_array = canonical_constraints(problem)
-    m, n, p, l, ncones, q, G, h, A, b, variable_index, eq_constr_index, ineq_constr_index =
-        create_ecos_matrices(canonical_constraints_array, problem.objective)
-
-    # Now, all we need to do is create c
-    c = zeros(n, 1)
-    objective = problem.objective
-    if objective.vexity != :constant
-        uid = objective.uid
-        c[variable_index[uid] : variable_index[uid] + objective.size[1] - 1] = 1
-    end  
-    return ECOSConicProblem(n=n, m=m, p=p, l=l, ncones=ncones, q=q, G=G, c=c, h=h, A=A, b=b), variable_index, eq_constr_index, ineq_constr_index
 end
 
 function IneqConicProblem(p::ConicProblem)
